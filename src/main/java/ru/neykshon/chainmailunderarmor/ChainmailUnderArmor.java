@@ -1,8 +1,12 @@
 package ru.neykshon.chainmailunderarmor;
 
 import net.fabricmc.api.ModInitializer;
+import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import ru.neykshon.chainmailunderarmor.item.ModItems;
+import ru.neykshon.chainmailunderarmor.attachment.ModAttachments;
 
 public class ChainmailUnderArmor implements ModInitializer {
 
@@ -13,6 +17,11 @@ public class ChainmailUnderArmor implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("Chainmail Under Armor is initializing!");
+        ModItems.initialize();
+        ModAttachments.initialize();
+    }
+
+    public static Identifier id(String path) {
+        return Identifier.fromNamespaceAndPath(MOD_ID, path);
     }
 }
