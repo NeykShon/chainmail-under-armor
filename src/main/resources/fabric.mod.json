@@ -1,0 +1,38 @@
+{
+	"schemaVersion": 1,
+	"id": "chainmail-under-armor",
+	"version": "${version}",
+	"name": "Chainmail under Armor",
+	"description": "This is an example description! Tell everyone what your mod is about!",
+	"authors": [
+		"Me!"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/chainmail-under-armor/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"ru.neykshon.chainmailunderarmor.ChainmailUnderArmor"
+		],
+		"client": [
+			"ru.neykshon.chainmailunderarmor.client.ChainmailUnderArmorClient"
+		]
+	},
+	"mixins": [
+		"chainmail-under-armor.mixins.json",
+		{
+			"config": "chainmail-under-armor.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.1.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
