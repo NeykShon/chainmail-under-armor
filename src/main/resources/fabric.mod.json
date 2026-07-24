@@ -1,17 +1,17 @@
 {
 	"schemaVersion": 1,
 	"id": "chainmail-under-armor",
-	"version": "${version}",
+	"version": "0.1",
 	"name": "Chainmail under Armor",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "Теперь можно носить кольчугу под бронёй!",
 	"authors": [
-		"Me!"
+		"NeykShon"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://discord.gg/Kp3VSgTt5f",
+		"sources": "https://github.com/NeykShon/chainmail-under-armor"
 	},
-	"license": "CC0-1.0",
+	"license": "Custom license",
 	"icon": "assets/chainmail-under-armor/icon.png",
 	"environment": "*",
 	"entrypoints": {
