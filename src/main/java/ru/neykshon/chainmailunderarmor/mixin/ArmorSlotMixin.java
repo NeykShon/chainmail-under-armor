@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import ru.neykshon.chainmailunderarmor.util.ChainmailUtil;
 import ru.neykshon.chainmailunderarmor.attachment.ChainmailAttachment;
 import ru.neykshon.chainmailunderarmor.attachment.ModAttachments;
+import ru.neykshon.chainmailunderarmor.accessor.ArmorSlotAccessor;
 
 @Mixin(targets = "net.minecraft.world.inventory.ArmorSlot")
 public abstract class ArmorSlotMixin implements ArmorSlotAccessor {

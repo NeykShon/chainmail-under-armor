@@ -1,4 +1,4 @@
-package ru.neykshon.chainmailunderarmor.mixin;
+package ru.neykshon.chainmailunderarmor.accessor;
 
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;

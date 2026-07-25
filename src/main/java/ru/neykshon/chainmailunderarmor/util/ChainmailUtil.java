@@ -1,8 +1,7 @@
-package ru.neykshon.chainmailunderarmor;
+package ru.neykshon.chainmailunderarmor.util;
 
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.item.ArmorItem;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -14,8 +13,8 @@ public final class ChainmailUtil {
     }
 
     /**
-     * Проверяет, является ли предмет кольчугой из нашего мода
-     * или ванильной кольчугой Minecraft.
+     * Проверяет, является ли предмет кольчугой
+     * из нашего мода или ванильной кольчугой Minecraft.
      */
     public static boolean isChainmail(ItemStack stack) {
         if (stack.isEmpty()) {
@@ -33,11 +32,12 @@ public final class ChainmailUtil {
     }
 
     /**
-     * Проверяет, является ли предмет обычной бронёй,
-     * то есть предметом, который можно надеть в один из
-     * четырёх основных слотов брони.
+     * Проверяет, является ли предмет обычной бронёй.
      *
      * Кольчуга намеренно исключается.
+     *
+     * В Minecraft 26.1.1 броня определяется через компонент
+     * DataComponents.EQUIPPABLE.
      */
     public static boolean isArmor(ItemStack stack) {
         if (stack.isEmpty()) {
@@ -45,43 +45,40 @@ public final class ChainmailUtil {
         }
 
         /*
-         * Кольчуга считается отдельным типом предмета.
-         * Она не должна проходить эту проверку,
-         * поскольку для неё используется специальная логика.
+         * Кольчуга обрабатывается отдельной механикой.
          */
         if (isChainmail(stack)) {
             return false;
         }
 
-        Item item = stack.getItem();
-
         /*
-         * ArmorItem — стандартный способ определить,
-         * что предмет является бронёй.
+         * Предметы с компонентом EQUIPPABLE могут быть
+         * экипируемыми предметами, поэтому дополнительно
+         * проверяем слот.
          *
-         * Сюда попадут:
-         * - кожаная броня
-         * - медная броня
-         * - железная броня
-         * - золотая броня
-         * - алмазная броня
-         * - незеритовая броня
-         * - черепаший панцирь
-         * и другие ArmorItem.
+         * Нам нужны только четыре основных слота брони.
          */
-        return item instanceof ArmorItem;
+        if (!stack.has(DataComponents.EQUIPPABLE)) {
+            return false;
+        }
+
+        var equippable = stack.get(DataComponents.EQUIPPABLE);
+
+        if (equippable == null) {
+            return false;
+        }
+
+        EquipmentSlot slot = equippable.slot();
+
+        return slot == EquipmentSlot.HEAD
+                || slot == EquipmentSlot.CHEST
+                || slot == EquipmentSlot.LEGS
+                || slot == EquipmentSlot.FEET;
     }
 
     /**
      * Проверяет, является ли кольчуга подходящей
      * для конкретного слота брони.
-     *
-     * Например:
-     *
-     * CHAINMAIL_HELMET -> HEAD
-     * CHAINMAIL_CHESTPLATE -> CHEST
-     * CHAINMAIL_LEGGINGS -> LEGS
-     * CHAINMAIL_BOOTS -> FEET
      */
     public static boolean isChainmailForSlot(
             ItemStack stack,

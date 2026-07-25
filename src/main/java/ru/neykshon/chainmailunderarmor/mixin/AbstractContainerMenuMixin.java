@@ -3,21 +3,17 @@ package ru.neykshon.chainmailunderarmor.mixin;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.List;
-
+import ru.neykshon.chainmailunderarmor.accessor.ArmorSlotAccessor;
 import ru.neykshon.chainmailunderarmor.attachment.ChainmailAttachment;
 import ru.neykshon.chainmailunderarmor.attachment.ModAttachments;
 
@@ -25,8 +21,7 @@ import ru.neykshon.chainmailunderarmor.attachment.ModAttachments;
 public abstract class AbstractContainerMenuMixin {
 
     @Shadow
-    @Final
-    protected List<Slot> slots;
+    public abstract Slot getSlot(int slotIndex);
 
     @Shadow
     public abstract ItemStack getCarried();
@@ -34,34 +29,6 @@ public abstract class AbstractContainerMenuMixin {
     @Shadow
     public abstract void setCarried(ItemStack stack);
 
-    /**
-     * Обрабатывает снятие обычной брони,
-     * если под ней находится кольчуга.
-     *
-     * Результат:
-     *
-     * Было:
-     *
-     * Attachment:
-     *     кольчуга
-     *
-     * ArmorSlot:
-     *     броня
-     *
-     * Курсор:
-     *     пусто
-     *
-     * После ЛКМ:
-     *
-     * Attachment:
-     *     пусто
-     *
-     * ArmorSlot:
-     *     кольчуга
-     *
-     * Курсор:
-     *     броня
-     */
     @Inject(
             method = "doClick",
             at = @At("HEAD"),
@@ -75,102 +42,93 @@ public abstract class AbstractContainerMenuMixin {
             CallbackInfo ci
     ) {
         /*
-         * Проверяем корректность индекса слота.
-         */
-        if (slotIndex < 0 || slotIndex >= this.slots.size()) {
-            return;
-        }
-
-        /*
-         * Обрабатываем только обычный PICKUP.
-         *
-         * QUICK_MOVE (Shift+ЛКМ) пока не трогаем.
+         * Нас интересует только обычный ЛКМ.
          */
         if (containerInput != ContainerInput.PICKUP) {
             return;
         }
 
-        /*
-         * Только ЛКМ.
-         *
-         * ПКМ пока оставляем ванильной механике.
-         */
         if (buttonNum != 0) {
             return;
         }
 
-        Slot clickedSlot = this.slots.get(slotIndex);
+        /*
+         * Проверяем индекс.
+         *
+         * Отрицательный индекс используется Minecraft
+         * для клика вне окна инвентаря.
+         */
+        if (slotIndex < 0) {
+            return;
+        }
 
         /*
-         * ArmorSlot является package-private,
-         * поэтому напрямую использовать instanceof ArmorSlot нельзя.
+         * Получаем слот через метод AbstractContainerMenu,
+         * не обращаясь напрямую к полю slots.
+         */
+        Slot clickedSlot;
+
+        try {
+            clickedSlot = this.getSlot(slotIndex);
+        } catch (IndexOutOfBoundsException ignored) {
+            return;
+        }
+
+        /*
+         * Проверяем, является ли слот ArmorSlot.
          *
-         * Вместо этого используем наш accessor-интерфейс,
-         * который реализуется ArmorSlotMixin.
+         * Сам ArmorSlot package-private,
+         * поэтому используем accessor.
          */
         if (!(clickedSlot instanceof ArmorSlotAccessor armorSlot)) {
             return;
         }
 
         /*
-         * Получаем слот экипировки:
-         *
-         * HEAD
-         * CHEST
-         * LEGS
-         * FEET
+         * Получаем EquipmentSlot.
          */
         EquipmentSlot equipmentSlot =
                 armorSlot.chainmailUnderArmor$getSlot();
 
         /*
-         * Получаем предмет, который сейчас находится
-         * в слоте брони.
+         * Получаем броню, находящуюся непосредственно
+         * в обычном слоте брони.
          */
         ItemStack armor = clickedSlot.getItem();
 
-        /*
-         * Если слот пустой,
-         * ванильная механика должна работать сама.
-         */
         if (armor.isEmpty()) {
             return;
         }
 
         /*
-         * Получаем Attachment игрока.
+         * Получаем кольчугу из Attachment.
          */
         ChainmailAttachment attachment =
                 player.getAttachedOrCreate(ModAttachments.CHAINMAIL);
 
-        /*
-         * Получаем кольчугу, находящуюся под бронёй.
-         */
         ItemStack chainmail =
                 attachment.get(equipmentSlot);
 
         /*
-         * Если кольчуги под бронёй нет,
-         * оставляем ванильное поведение.
+         * Если под бронёй нет кольчуги,
+         * оставляем стандартное поведение Minecraft.
          */
         if (chainmail.isEmpty()) {
             return;
         }
 
         /*
-         * На курсоре должен находиться пустой предмет.
+         * Если на курсоре уже что-то есть,
+         * это не обычное снятие брони.
          *
-         * Это соответствует обычному ЛКМ по предмету:
-         *
-         * Курсор: пусто
-         * Слот: броня
+         * Пока оставляем ванильную механику.
          */
         if (!this.getCarried().isEmpty()) {
             return;
         }
 
         /*
-         * Кладём броню на курсор.
+         * Кладём верхнюю броню на курсор.
          */
         this.setCarried(armor.copy());
 
@@ -178,30 +136,23 @@ public abstract class AbstractContainerMenuMixin {
          * Возвращаем кольчугу в обычный ArmorSlot.
          *
          * Используем set(), а не setByPlayer(),
-         * чтобы ArmorSlotMixin не попытался
-         * снова положить кольчугу в Attachment.
+         * чтобы ArmorSlotMixin не обработал её повторно.
          */
         clickedSlot.set(chainmail.copy());
 
         /*
-         * Удаляем кольчугу из Attachment.
+         * Очищаем Attachment.
          */
-        ChainmailAttachment updated =
+        player.setAttached(
+                ModAttachments.CHAINMAIL,
                 attachment.with(
                         equipmentSlot,
                         ItemStack.EMPTY
-                );
-
-        player.setAttached(
-                ModAttachments.CHAINMAIL,
-                updated
+                )
         );
 
         /*
-         * Полностью отменяем ванильную обработку клика.
-         *
-         * Иначе Minecraft дополнительно обработает
-         * тот же самый клик и состояние слота может сломаться.
+         * Отменяем ванильную обработку клика.
          */
         ci.cancel();
     }
