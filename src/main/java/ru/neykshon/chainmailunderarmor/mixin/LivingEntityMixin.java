@@ -7,6 +7,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.gamerules.GameRules;
 
 import org.spongepowered.asm.mixin.Mixin;
@@ -14,6 +15,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import ru.neykshon.chainmailunderarmor.ChainmailUnderArmor;
 import ru.neykshon.chainmailunderarmor.attachment.ChainmailAttachment;
 import ru.neykshon.chainmailunderarmor.attachment.ModAttachments;
 
@@ -30,8 +32,7 @@ public abstract class LivingEntityMixin {
             CallbackInfo ci
     ) {
 
-        LivingEntity entity =
-                (LivingEntity) (Object) this;
+        LivingEntity entity = (LivingEntity) (Object) this;
 
         /*
          * Нас интересуют только игроки.
@@ -40,8 +41,8 @@ public abstract class LivingEntityMixin {
             return;
         }
 
-        System.out.println(
-                "[ChainmailUnderArmor] Processing death loot for player"
+        ChainmailUnderArmor.LOGGER.debug(
+                "Processing death loot for player {}", player.getName().getString()
         );
 
         /*
@@ -50,24 +51,19 @@ public abstract class LivingEntityMixin {
          * =========================================================
          *
          * При включённом keepInventory Attachment НЕ трогаем.
-         *
-         * Это важно: кольчуга должна сохраниться у игрока
-         * вместе с обычной экипировкой.
+         * Кольчуга должна сохраниться у игрока вместе
+         * с обычной экипировкой.
          * =========================================================
          */
 
-        if ((Boolean) level.getGameRules().get(
-                GameRules.KEEP_INVENTORY
-        )) {
+        if ((Boolean) level.getGameRules().get(GameRules.KEEP_INVENTORY)) {
 
-            System.out.println(
-                    "[ChainmailUnderArmor] KeepInventory = true, "
-                            + "attached chainmail will be preserved"
+            ChainmailUnderArmor.LOGGER.debug(
+                    "KeepInventory = true, attached chainmail will be preserved"
             );
 
             return;
         }
-
 
         /*
          * =========================================================
@@ -75,54 +71,19 @@ public abstract class LivingEntityMixin {
          * =========================================================
          */
 
-        if (!player.hasAttached(
-                ModAttachments.CHAINMAIL
-        )) {
-
-            System.out.println(
-                    "[ChainmailUnderArmor] No chainmail attachment"
-            );
-
+        if (!player.hasAttached(ModAttachments.CHAINMAIL)) {
             return;
         }
 
-
-        /*
-         * Получаем текущее содержимое Attachment.
-         *
-         * ВАЖНО:
-         * Сохраняем ссылку на текущее состояние до очистки.
-         */
         ChainmailAttachment attachment =
-                player.getAttached(
-                        ModAttachments.CHAINMAIL
-                );
+                player.getAttached(ModAttachments.CHAINMAIL);
 
-
-        System.out.println(
-                "[ChainmailUnderArmor] Attachment before death drop:"
+        ChainmailUnderArmor.LOGGER.debug(
+                "Attachment before death drop: helmet={}, chestplate={}, "
+                        + "leggings={}, boots={}",
+                attachment.helmet(), attachment.chestplate(),
+                attachment.leggings(), attachment.boots()
         );
-
-        System.out.println(
-                "Helmet: "
-                        + attachment.helmet()
-        );
-
-        System.out.println(
-                "Chestplate: "
-                        + attachment.chestplate()
-        );
-
-        System.out.println(
-                "Leggings: "
-                        + attachment.leggings()
-        );
-
-        System.out.println(
-                "Boots: "
-                        + attachment.boots()
-        );
-
 
         /*
          * =========================================================
@@ -130,34 +91,14 @@ public abstract class LivingEntityMixin {
          * =========================================================
          */
 
-        chainmailUnderArmor$dropChainmail(
-                player,
-                attachment.helmet()
-        );
-
-        chainmailUnderArmor$dropChainmail(
-                player,
-                attachment.chestplate()
-        );
-
-        chainmailUnderArmor$dropChainmail(
-                player,
-                attachment.leggings()
-        );
-
-        chainmailUnderArmor$dropChainmail(
-                player,
-                attachment.boots()
-        );
-
+        chainmailUnderArmor$dropChainmail(player, attachment.helmet());
+        chainmailUnderArmor$dropChainmail(player, attachment.chestplate());
+        chainmailUnderArmor$dropChainmail(player, attachment.leggings());
+        chainmailUnderArmor$dropChainmail(player, attachment.boots());
 
         /*
          * =========================================================
          * ОЧИЩАЕМ ATTACHMENT
-         * =========================================================
-         *
-         * После смерти Attachment больше не должен содержать
-         * предметы, которые уже были обработаны.
          * =========================================================
          */
 
@@ -166,11 +107,8 @@ public abstract class LivingEntityMixin {
                 ChainmailAttachment.empty()
         );
 
-        System.out.println(
-                "[ChainmailUnderArmor] Attachment cleared after death"
-        );
+        ChainmailUnderArmor.LOGGER.debug("Attachment cleared after death");
     }
-
 
     /*
      * =========================================================
@@ -183,51 +121,46 @@ public abstract class LivingEntityMixin {
             ItemStack stack
     ) {
 
-        /*
-         * Пустой слот пропускаем.
-         */
         if (stack.isEmpty()) {
             return;
         }
-
 
         /*
          * =========================================================
          * CURSE OF VANISHING
          * =========================================================
          *
-         * Vanishing должен уничтожить предмет при смерти.
+         * Vanishing должен уничтожить предмет при смерти,
+         * поэтому такой предмет НЕ дропаем.
          *
-         * Поэтому такой предмет НЕ дропаем.
+         * ВАЖНО: enchantments.keySet() возвращает
+         * Set<Holder<Enchantment>>, а Enchantments.VANISHING_CURSE —
+         * это ResourceKey<Enchantment>. Сравнивать их через equals()
+         * нельзя (это гарантированно false для любого чара) —
+         * нужно Holder#is(ResourceKey). Раньше здесь стояла
+         * проверка через equals(), из-за которой Curse of Vanishing
+         * никогда не срабатывал и кольчуга дропалась всегда.
          *
-         * Curse of Binding здесь специально НЕ проверяем.
-         * Binding не должен влиять на дроп после смерти.
+         * Curse of Binding здесь намеренно НЕ проверяется — Binding
+         * не должен влиять на дроп после смерти.
          * =========================================================
          */
 
         if (stack.has(DataComponents.ENCHANTMENTS)) {
 
-            var enchantments =
-                    stack.get(DataComponents.ENCHANTMENTS);
+            ItemEnchantments enchantments = stack.get(DataComponents.ENCHANTMENTS);
 
             if (enchantments != null
-                    && enchantments.keySet().stream().anyMatch(
-                    enchantment ->
-                            enchantment.equals(
-                                    Enchantments.VANISHING_CURSE
-                            )
-            )) {
+                    && enchantments.keySet().stream()
+                    .anyMatch(holder -> holder.is(Enchantments.VANISHING_CURSE))) {
 
-                System.out.println(
-                        "[ChainmailUnderArmor] Chainmail has "
-                                + "Curse of Vanishing, destroying: "
-                                + stack
+                ChainmailUnderArmor.LOGGER.debug(
+                        "Chainmail has Curse of Vanishing, destroying: {}", stack
                 );
 
                 return;
             }
         }
-
 
         /*
          * =========================================================
@@ -235,15 +168,8 @@ public abstract class LivingEntityMixin {
          * =========================================================
          */
 
-        System.out.println(
-                "[ChainmailUnderArmor] Dropping attached chainmail: "
-                        + stack
-        );
+        ChainmailUnderArmor.LOGGER.debug("Dropping attached chainmail: {}", stack);
 
-        player.drop(
-                stack.copy(),
-                false,
-                false
-        );
+        player.drop(stack.copy(), false, false);
     }
 }
