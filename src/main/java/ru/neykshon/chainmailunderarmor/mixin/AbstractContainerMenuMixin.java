@@ -30,6 +30,11 @@ public abstract class AbstractContainerMenuMixin {
     @Shadow
     public abstract void setCarried(ItemStack stack);
 
+    @Shadow
+    public abstract ItemStack quickMoveStack(
+            Player player,
+            int slotIndex
+    );
 
     @Inject(
             method = "doClick",
@@ -46,29 +51,11 @@ public abstract class AbstractContainerMenuMixin {
 
         /*
          * =========================================================
-         * ПРОВЕРКА ИНДЕКСА СЛОТА
+         * ПРОВЕРКА ИНДЕКСА
          * =========================================================
          */
 
         if (slotIndex < 0) {
-            return;
-        }
-
-
-        /*
-         * =========================================================
-         * ОБРАБАТЫВАЕМ ТОЛЬКО ОБЫЧНЫЙ ЛКМ
-         *
-         * Shift+ЛКМ и остальные типы кликов пока оставляем
-         * ванильной механике.
-         * =========================================================
-         */
-
-        if (containerInput != ContainerInput.PICKUP) {
-            return;
-        }
-
-        if (buttonNum != 0) {
             return;
         }
 
@@ -83,10 +70,432 @@ public abstract class AbstractContainerMenuMixin {
 
 
         /*
-         * ArmorSlot является package-private,
-         * поэтому напрямую использовать его нельзя.
+         * =========================================================
+         * SHIFT + ЛКМ
+         * =========================================================
          *
-         * Используем наш accessor.
+         * Здесь обрабатываем два случая:
+         *
+         * 1. Shift+ЛКМ по обычной броне из инвентаря,
+         *    когда в соответствующем ArmorSlot находится
+         *    кольчуга.
+         *
+         *    Было:
+         *
+         *    ArmorSlot:
+         *        кольчуга
+         *
+         *    Attachment:
+         *        пусто
+         *
+         *    Inventory:
+         *        броня
+         *
+         *    После:
+         *
+         *    ArmorSlot:
+         *        броня
+         *
+         *    Attachment:
+         *        кольчуга
+         *
+         *    Inventory:
+         *        пусто
+         *
+         *
+         * 2. Shift+ЛКМ по обычной броне, которая уже находится
+         *    в ArmorSlot и под которой есть кольчуга.
+         *
+         *    В этом случае броня снимается в инвентарь,
+         *    а кольчуга возвращается в ArmorSlot.
+         *
+         * =========================================================
+         */
+
+        if (containerInput == ContainerInput.QUICK_MOVE
+                && buttonNum == 0) {
+
+            /*
+             * -----------------------------------------------------
+             * СЛУЧАЙ A
+             *
+             * Shift+ЛКМ непосредственно по ArmorSlot.
+             *
+             * Это снятие верхней брони обратно в инвентарь.
+             * -----------------------------------------------------
+             */
+
+            if (clickedSlot instanceof ArmorSlotAccessor armorSlotAccessor) {
+
+                EquipmentSlot equipmentSlot =
+                        armorSlotAccessor.chainmailUnderArmor$getSlot();
+
+                ItemStack armorInSlot =
+                        clickedSlot.getItem();
+
+                if (!armorInSlot.isEmpty()
+                        && ChainmailUtil.isArmor(armorInSlot)) {
+
+                    ChainmailAttachment attachment =
+                            player.getAttachedOrCreate(
+                                    ModAttachments.CHAINMAIL
+                            );
+
+                    ItemStack attachedChainmail =
+                            attachment.get(equipmentSlot);
+
+                    /*
+                     * Если под бронёй нет кольчуги,
+                     * используем стандартную механику Minecraft.
+                     */
+                    if (attachedChainmail.isEmpty()) {
+                        return;
+                    }
+
+                    /*
+                     * Сохраняем кольчугу.
+                     */
+                    ItemStack chainmailToRestore =
+                            attachedChainmail.copy();
+
+                    /*
+                     * Временно убираем кольчугу
+                     * из Attachment.
+                     *
+                     * Это нужно, чтобы ванильный
+                     * quickMoveStack() корректно снял броню.
+                     */
+                    player.setAttached(
+                            ModAttachments.CHAINMAIL,
+                            attachment.with(
+                                    equipmentSlot,
+                                    ItemStack.EMPTY
+                            )
+                    );
+
+                    /*
+                     * Запоминаем броню.
+                     */
+                    ItemStack armorBefore =
+                            armorInSlot.copy();
+
+                    /*
+                     * Выполняем ванильный Shift+ЛКМ.
+                     *
+                     * Броня должна отправиться
+                     * в инвентарь игрока.
+                     */
+                    this.quickMoveStack(
+                            player,
+                            slotIndex
+                    );
+
+                    /*
+                     * Проверяем результат.
+                     */
+                    boolean armorWasMoved =
+                            clickedSlot.getItem().isEmpty()
+                                    && !armorBefore.isEmpty();
+
+                    if (armorWasMoved) {
+
+                        /*
+                         * Броня успешно ушла в инвентарь.
+                         *
+                         * Возвращаем кольчугу
+                         * в ArmorSlot.
+                         */
+                        clickedSlot.set(
+                                chainmailToRestore
+                        );
+
+                    } else {
+
+                        /*
+                         * Броня не смогла переместиться.
+                         *
+                         * Возвращаем кольчугу
+                         * обратно в Attachment.
+                         */
+                        player.setAttached(
+                                ModAttachments.CHAINMAIL,
+                                attachment.with(
+                                        equipmentSlot,
+                                        chainmailToRestore
+                                )
+                        );
+                    }
+
+                    /*
+                     * Ванильный doClick() больше ничего
+                     * делать не должен.
+                     */
+                    ci.cancel();
+                    return;
+                }
+            }
+
+
+            /*
+             * -----------------------------------------------------
+             * СЛУЧАЙ B
+             *
+             * Shift+ЛКМ по обычной броне в инвентаре.
+             *
+             * Если в соответствующем ArmorSlot находится
+             * кольчуга, переносим её в Attachment,
+             * а броню ставим поверх неё.
+             * -----------------------------------------------------
+             */
+
+            ItemStack clickedItem =
+                    clickedSlot.getItem();
+
+            /*
+             * Нас интересует только обычная броня.
+             *
+             * Кольчуга здесь не обрабатывается.
+             */
+            if (clickedItem.isEmpty()
+                    || !ChainmailUtil.isArmor(clickedItem)) {
+
+                return;
+            }
+
+            /*
+             * Определяем, в какой ArmorSlot должна попасть
+             * эта броня.
+             */
+            EquipmentSlot armorEquipmentSlot =
+                    ChainmailUtil.getArmorSlot(clickedItem);
+
+            if (armorEquipmentSlot == null) {
+                return;
+            }
+
+
+            /*
+             * Ищем ArmorSlot соответствующего типа.
+             *
+             * Здесь мы не используем this.slots,
+             * поэтому Shadow для slots не нужен.
+             *
+             * В большинстве случаев это будет стандартный
+             * InventoryMenu игрока.
+             *
+             * Диапазон 0..45 соответствует стандартному
+             * инвентарю игрока:
+             *
+             * 0-8   — хотбар
+             * 9-35  — основной инвентарь
+             * 36-39 — ArmorSlot
+             * 40    — offhand
+             *
+             * Однако мы всё равно проверяем через Accessor,
+             * поэтому жёстко полагаться на номер слота
+             * не будем.
+             */
+
+            Slot targetArmorSlot = null;
+
+            for (int i = 0; i < 46; i++) {
+
+                Slot possibleSlot;
+
+                try {
+                    possibleSlot = this.getSlot(i);
+                } catch (Exception ignored) {
+                    continue;
+                }
+
+                if (possibleSlot instanceof ArmorSlotAccessor accessor
+                        && accessor.chainmailUnderArmor$getSlot()
+                        == armorEquipmentSlot) {
+
+                    targetArmorSlot = possibleSlot;
+                    break;
+                }
+            }
+
+            /*
+             * ArmorSlot не найден.
+             *
+             * Это может быть контейнер,
+             * в котором нет слотов брони игрока.
+             *
+             * Оставляем ванильное поведение.
+             */
+            if (targetArmorSlot == null) {
+                return;
+            }
+
+
+            /*
+             * Получаем предмет,
+             * который сейчас находится в ArmorSlot.
+             */
+            ItemStack currentArmorSlotItem =
+                    targetArmorSlot.getItem();
+
+
+            /*
+             * Получаем Attachment.
+             */
+            ChainmailAttachment quickMoveAttachment =
+                    player.getAttachedOrCreate(
+                            ModAttachments.CHAINMAIL
+                    );
+
+
+            /*
+             * Получаем кольчугу из Attachment.
+             */
+            ItemStack currentAttachedChainmail =
+                    quickMoveAttachment.get(
+                            armorEquipmentSlot
+                    );
+
+
+            /*
+             * Нас интересует только состояние:
+             *
+             * ArmorSlot:
+             *     кольчуга
+             *
+             * Attachment:
+             *     пусто
+             *
+             * Inventory:
+             *     обычная броня
+             */
+            if (!ChainmailUtil.isChainmailForSlot(
+                    currentArmorSlotItem,
+                    armorEquipmentSlot
+            )) {
+
+                /*
+                 * В ArmorSlot нет кольчуги.
+                 *
+                 * Оставляем ванильный Shift+ЛКМ.
+                 */
+                return;
+            }
+
+            /*
+             * Дополнительная защита от дублирования.
+             *
+             * Если Attachment уже содержит кольчугу,
+             * мы не должны создавать вторую.
+             */
+            if (!currentAttachedChainmail.isEmpty()) {
+
+                /*
+                 * Ситуация некорректная:
+                 *
+                 * ArmorSlot:
+                 *     кольчуга
+                 *
+                 * Attachment:
+                 *     кольчуга
+                 *
+                 * Поэтому ничего не делаем.
+                 */
+                ci.cancel();
+                return;
+            }
+
+
+            /*
+             * =====================================================
+             * ПЕРЕНОСИМ КОЛЬЧУГУ В ATTACHMENT
+             * =====================================================
+             */
+
+            ChainmailAttachment updatedAttachment =
+                    quickMoveAttachment.with(
+                            armorEquipmentSlot,
+                            currentArmorSlotItem.copy()
+                    );
+
+            player.setAttached(
+                    ModAttachments.CHAINMAIL,
+                    updatedAttachment
+            );
+
+
+            /*
+             * =====================================================
+             * СТАВИМ БРОНЮ В ARMOR SLOT
+             * =====================================================
+             */
+
+            targetArmorSlot.set(
+                    clickedItem.copy()
+            );
+
+
+            /*
+             * =====================================================
+             * УДАЛЯЕМ БРОНЮ ИЗ ИСХОДНОГО СЛОТА
+             * =====================================================
+             */
+
+            clickedSlot.set(
+                    ItemStack.EMPTY
+            );
+
+
+            /*
+             * =====================================================
+             * ОТМЕНЯЕМ ВАНИЛЬНЫЙ QUICK_MOVE
+             * =====================================================
+             *
+             * Мы уже полностью выполнили перемещение вручную.
+             *
+             * Если не отменить ванильный doClick(),
+             * он попытается обработать тот же предмет повторно.
+             *
+             * Это может привести к:
+             *
+             * - дюпу;
+             * - потере предмета;
+             * - повторному перемещению;
+             * - неправильной синхронизации.
+             * =====================================================
+             */
+
+            ci.cancel();
+            return;
+        }
+
+
+        /*
+         * =========================================================
+         * ВСЕ ОСТАЛЬНЫЕ ТИПЫ КЛИКА
+         * =========================================================
+         *
+         * Нас интересует только:
+         *
+         * - обычный ЛКМ;
+         * - Shift+ЛКМ.
+         *
+         * Всё остальное передаём ванильной механике.
+         * =========================================================
+         */
+
+        if (containerInput != ContainerInput.PICKUP) {
+            return;
+        }
+
+        if (buttonNum != 0) {
+            return;
+        }
+
+
+        /*
+         * =========================================================
+         * ЕСЛИ СЛОТ НЕ ARMOR SLOT
+         * =========================================================
          */
 
         if (!(clickedSlot instanceof ArmorSlotAccessor armorSlot)) {
@@ -97,11 +506,6 @@ public abstract class AbstractContainerMenuMixin {
         /*
          * =========================================================
          * ОПРЕДЕЛЯЕМ СЛОТ БРОНИ
-         *
-         * HEAD
-         * CHEST
-         * LEGS
-         * FEET
          * =========================================================
          */
 
@@ -111,20 +515,15 @@ public abstract class AbstractContainerMenuMixin {
 
         /*
          * =========================================================
-         * ПОЛУЧАЕМ ТЕКУЩИЙ ПРЕДМЕТ В ARMOR SLOT
+         * ПОЛУЧАЕМ ПРЕДМЕТЫ
          * =========================================================
          */
 
-        ItemStack slotItem = clickedSlot.getItem();
+        ItemStack slotItem =
+                clickedSlot.getItem();
 
-
-        /*
-         * =========================================================
-         * ПОЛУЧАЕМ ПРЕДМЕТ НА КУРСОРЕ
-         * =========================================================
-         */
-
-        ItemStack carried = this.getCarried();
+        ItemStack carried =
+                this.getCarried();
 
 
         /*
@@ -139,25 +538,17 @@ public abstract class AbstractContainerMenuMixin {
                 );
 
 
-        /*
-         * =========================================================
-         * ПОЛУЧАЕМ КОЛЬЧУГУ ИЗ ATTACHMENT
-         *
-         * Если здесь находится кольчуга,
-         * значит в ArmorSlot сейчас должна находиться
-         * обычная броня поверх неё.
-         * =========================================================
-         */
-
         ItemStack attachedChainmail =
-                attachment.get(equipmentSlot);
+                attachment.get(
+                        equipmentSlot
+                );
 
 
         /*
          * =========================================================
          * СЦЕНАРИЙ №1
          *
-         * СНЯТИЕ БРОНИ, КОГДА ПОД НЕЙ ЕСТЬ КОЛЬЧУГА
+         * СНЯТИЕ БРОНИ С КОЛЬЧУГОЙ ПОД НЕЙ
          *
          * Было:
          *
@@ -184,12 +575,12 @@ public abstract class AbstractContainerMenuMixin {
          */
 
         if (!slotItem.isEmpty()
+                && ChainmailUtil.isArmor(slotItem)
                 && !attachedChainmail.isEmpty()
-                && carried.isEmpty()
-                && ChainmailUtil.isArmor(slotItem)) {
+                && carried.isEmpty()) {
 
             /*
-             * Сохраняем броню на курсор.
+             * Кладём броню на курсор.
              */
             this.setCarried(
                     slotItem.copy()
@@ -198,16 +589,7 @@ public abstract class AbstractContainerMenuMixin {
 
             /*
              * Возвращаем кольчугу
-             * из Attachment в ArmorSlot.
-             *
-             * Используем set(), а не setByPlayer().
-             *
-             * Это важно:
-             *
-             * setByPlayer() может снова вызвать
-             * нашу логику ArmorSlotMixin.
-             *
-             * set() просто устанавливает предмет.
+             * в ArmorSlot.
              */
             clickedSlot.set(
                     attachedChainmail.copy()
@@ -215,23 +597,19 @@ public abstract class AbstractContainerMenuMixin {
 
 
             /*
-             * Удаляем кольчугу из Attachment.
+             * Очищаем Attachment.
              */
-            ChainmailAttachment updated =
+            player.setAttached(
+                    ModAttachments.CHAINMAIL,
                     attachment.with(
                             equipmentSlot,
                             ItemStack.EMPTY
-                    );
-
-
-            player.setAttached(
-                    ModAttachments.CHAINMAIL,
-                    updated
+                    )
             );
 
 
             /*
-             * Полностью отменяем ванильный клик.
+             * Отменяем ванильную обработку.
              */
             ci.cancel();
             return;
@@ -265,7 +643,6 @@ public abstract class AbstractContainerMenuMixin {
          *
          * Cursor:
          *     пусто
-         *
          * =========================================================
          */
 
@@ -277,27 +654,22 @@ public abstract class AbstractContainerMenuMixin {
                 && ChainmailUtil.isArmor(carried)
                 && attachedChainmail.isEmpty()) {
 
-
             /*
              * Перемещаем кольчугу
-             * из ArmorSlot в Attachment.
+             * в Attachment.
              */
-            ChainmailAttachment updated =
+            player.setAttached(
+                    ModAttachments.CHAINMAIL,
                     attachment.with(
                             equipmentSlot,
                             slotItem.copy()
-                    );
-
-
-            player.setAttached(
-                    ModAttachments.CHAINMAIL,
-                    updated
+                    )
             );
 
 
             /*
              * Устанавливаем броню
-             * непосредственно в ArmorSlot.
+             * в ArmorSlot.
              */
             clickedSlot.set(
                     carried.copy()
@@ -305,7 +677,7 @@ public abstract class AbstractContainerMenuMixin {
 
 
             /*
-             * Убираем броню с курсора.
+             * Очищаем курсор.
              */
             this.setCarried(
                     ItemStack.EMPTY
@@ -314,13 +686,6 @@ public abstract class AbstractContainerMenuMixin {
 
             /*
              * Отменяем ванильный клик.
-             *
-             * Это предотвращает стандартную замену:
-             *
-             * кольчуга -> броня
-             *
-             * при которой кольчуга попала бы
-             * на курсор и могла бы привести к дюпу.
              */
             ci.cancel();
             return;
@@ -332,27 +697,7 @@ public abstract class AbstractContainerMenuMixin {
          * СЦЕНАРИЙ №3
          *
          * ЗАПРЕТ НАДЕВАНИЯ КОЛЬЧУГИ ПОВЕРХ БРОНИ,
-         * ЕСЛИ ПОД БРОНЁЙ УЖЕ ЕСТЬ КОЛЬЧУГА.
-         *
-         * Было:
-         *
-         * ArmorSlot:
-         *     броня
-         *
-         * Attachment:
-         *     кольчуга
-         *
-         * Cursor:
-         *     новая кольчуга
-         *
-         * Результат:
-         *
-         * НИЧЕГО НЕ ПРОИСХОДИТ.
-         *
-         * Это предотвращает ситуацию,
-         * когда кольчуга из Attachment
-         * и новая кольчуга могут одновременно
-         * существовать в одной позиции.
+         * ЕСЛИ В ATTACHMENT УЖЕ ЕСТЬ КОЛЬЧУГА
          * =========================================================
          */
 
@@ -364,11 +709,6 @@ public abstract class AbstractContainerMenuMixin {
                 equipmentSlot
         )) {
 
-            /*
-             * Ничего не меняем.
-             *
-             * Просто отменяем ванильную обработку.
-             */
             ci.cancel();
             return;
         }
@@ -378,24 +718,8 @@ public abstract class AbstractContainerMenuMixin {
          * =========================================================
          * СЦЕНАРИЙ №4
          *
-         * ЗАПРЕТ НАДЕВАНИЯ КОЛЬЧУГИ В ПУСТОЙ СЛОТ,
-         * ЕСЛИ В ATTACHMENT УЖЕ ЕСТЬ КОЛЬЧУГА.
-         *
-         * Это защита от потенциального дюпа,
-         * если каким-либо образом возникнет состояние:
-         *
-         * ArmorSlot:
-         *     пусто
-         *
-         * Attachment:
-         *     кольчуга
-         *
-         * Cursor:
-         *     новая кольчуга
-         *
-         * Результат:
-         *
-         * НИЧЕГО НЕ ПРОИСХОДИТ.
+         * ЗАПРЕТ НАДЕВАНИЯ КОЛЬЧУГИ В ПУСТОЙ ARMOR SLOT,
+         * ЕСЛИ В ATTACHMENT УЖЕ ЕСТЬ КОЛЬЧУГА
          * =========================================================
          */
 
@@ -413,48 +737,9 @@ public abstract class AbstractContainerMenuMixin {
 
         /*
          * =========================================================
-         * СЦЕНАРИЙ №5
-         *
-         * ЗАПРЕТ НАДЕВАНИЯ ВТОРОЙ КОЛЬЧУГИ
-         * В СЛОТ, ГДЕ УЖЕ ЕСТЬ КОЛЬЧУГА.
-         *
-         * Обычно этот сценарий обработает ваниль,
-         * но оставляем явную проверку.
-         *
-         * Было:
-         *
-         * ArmorSlot:
-         *     кольчуга
-         *
-         * Attachment:
-         *     пусто
-         *
-         * Cursor:
-         *     кольчуга
-         *
-         * Ванильная механика заменяет кольчугу
-         * другой кольчугой.
-         *
-         * Это разрешено.
-         *
-         * Поэтому здесь ничего не отменяем.
-         */
-
-
-        /*
-         * =========================================================
          * ВСЕ ОСТАЛЬНЫЕ СЛУЧАИ
          *
-         * Передаём обработку ванильной механике.
-         *
-         * Например:
-         *
-         * - обычная броня -> обычная броня
-         * - снятие обычной брони без кольчуги
-         * - надевание брони в пустой слот
-         * - надевание кольчуги в пустой слот
-         * - смена кольчуги на кольчугу
-         *
+         * Передаём ванильной механике.
          * =========================================================
          */
     }

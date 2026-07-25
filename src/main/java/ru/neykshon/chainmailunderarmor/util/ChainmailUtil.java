@@ -2,6 +2,7 @@ package ru.neykshon.chainmailunderarmor.util;
 
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -137,6 +138,65 @@ public final class ChainmailUtil {
 
         if (stack.is(ModItems.CHAINMAIL_BOOTS)
                 || stack.is(Items.CHAINMAIL_BOOTS)) {
+            return EquipmentSlot.FEET;
+        }
+
+        return null;
+    }
+
+    public static EquipmentSlot getArmorSlot(ItemStack stack) {
+        if (stack.isEmpty()) {
+            return null;
+        }
+
+        Item item = stack.getItem();
+
+        // HEAD
+        if (item == Items.LEATHER_HELMET
+                || item == Items.CHAINMAIL_HELMET
+                || item == Items.COPPER_HELMET
+                || item == Items.IRON_HELMET
+                || item == Items.GOLDEN_HELMET
+                || item == Items.DIAMOND_HELMET
+                || item == Items.NETHERITE_HELMET
+                || item == Items.TURTLE_HELMET) {
+
+            return EquipmentSlot.HEAD;
+        }
+
+        // CHEST
+        if (item == Items.LEATHER_CHESTPLATE
+                || item == Items.CHAINMAIL_CHESTPLATE
+                || item == Items.COPPER_CHESTPLATE
+                || item == Items.IRON_CHESTPLATE
+                || item == Items.GOLDEN_CHESTPLATE
+                || item == Items.DIAMOND_CHESTPLATE
+                || item == Items.NETHERITE_CHESTPLATE) {
+
+            return EquipmentSlot.CHEST;
+        }
+
+        // LEGS
+        if (item == Items.LEATHER_LEGGINGS
+                || item == Items.CHAINMAIL_LEGGINGS
+                || item == Items.COPPER_LEGGINGS
+                || item == Items.IRON_LEGGINGS
+                || item == Items.GOLDEN_LEGGINGS
+                || item == Items.DIAMOND_LEGGINGS
+                || item == Items.NETHERITE_LEGGINGS) {
+
+            return EquipmentSlot.LEGS;
+        }
+
+        // FEET
+        if (item == Items.LEATHER_BOOTS
+                || item == Items.CHAINMAIL_BOOTS
+                || item == Items.COPPER_BOOTS
+                || item == Items.IRON_BOOTS
+                || item == Items.GOLDEN_BOOTS
+                || item == Items.DIAMOND_BOOTS
+                || item == Items.NETHERITE_BOOTS) {
+
             return EquipmentSlot.FEET;
         }
 
