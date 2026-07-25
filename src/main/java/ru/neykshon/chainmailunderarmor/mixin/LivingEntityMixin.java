@@ -34,9 +34,6 @@ public abstract class LivingEntityMixin {
 
         LivingEntity entity = (LivingEntity) (Object) this;
 
-        /*
-         * Нас интересуют только игроки.
-         */
         if (!(entity instanceof Player player)) {
             return;
         }
