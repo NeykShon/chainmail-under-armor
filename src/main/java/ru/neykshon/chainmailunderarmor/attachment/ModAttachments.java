@@ -25,12 +25,21 @@ public class ModAttachments {
      * логика (persistent codec + copy-on-respawn) должна остаться
      * той же.
      */
+
     public static final AttachmentType<ChainmailAttachment> CHAINMAIL =
             AttachmentRegistry.<ChainmailAttachment>builder()
                     .initializer(ChainmailAttachment::empty)
                     .persistent(ChainmailAttachment.CODEC)
-                    .copyOnDeath()
-                    .buildAndRegister(ChainmailUnderArmor.id("chainmail"));
+                    .buildAndRegister(
+                            ChainmailUnderArmor.id("chainmail")
+                    );
+
+//    public static final AttachmentType<ChainmailAttachment> CHAINMAIL =
+//            AttachmentRegistry.<ChainmailAttachment>builder()
+//                    .initializer(ChainmailAttachment::empty)
+//                    .persistent(ChainmailAttachment.CODEC)
+//                    .copyOnDeath()
+//                    .buildAndRegister(ChainmailUnderArmor.id("chainmail"));
 
     public static void initialize() {
         ChainmailUnderArmor.LOGGER.info(
