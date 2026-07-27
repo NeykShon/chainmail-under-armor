@@ -125,3 +125,4 @@
 ## Контакты
 
 Мой Discord сервер: https://discord.gg/Kp3VSgTt5f
+Донат: https://www.donationalerts.com/r/neykshon
