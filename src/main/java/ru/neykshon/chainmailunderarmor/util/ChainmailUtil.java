@@ -32,14 +32,7 @@ public final class ChainmailUtil {
                 || stack.is(Items.CHAINMAIL_BOOTS);
     }
 
-    /**
-     * Проверяет, является ли предмет обычной бронёй.
-     *
-     * Кольчуга намеренно исключается.
-     *
-     * В Minecraft 26.1.1 броня определяется через компонент
-     * DataComponents.EQUIPPABLE.
-     */
+
     public static boolean isArmor(ItemStack stack) {
         if (stack.isEmpty()) {
             return false;

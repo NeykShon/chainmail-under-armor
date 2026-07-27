@@ -20,38 +20,6 @@ import ru.neykshon.chainmailunderarmor.attachment.ChainmailAttachment;
 import ru.neykshon.chainmailunderarmor.attachment.ModAttachments;
 import ru.neykshon.chainmailunderarmor.util.ChainmailUtil;
 
-/**
- * ЦЕНТРАЛЬНАЯ ИДЕЯ ПЕРЕПИСАННОЙ ВЕРСИИ
- * =========================================================
- *
- * Старая версия пыталась вручную перечислить все типы кликов
- * (PICKUP, QUICK_MOVE), которые могут затронуть ArmorSlot.
- * Любой не перечисленный тип (SWAP по хотбару, THROW через Q,
- * drop за пределы окна и т.д.) проходил мимо мода — Attachment
- * переставал соответствовать содержимому слота.
- *
- * Новый подход не перечисляет типы кликов. Вместо этого:
- *
- * 1. В начале КАЖДОГО клика по ArmorSlot мы, если необходимо,
- *    самовосстанавливаем рассинхронизацию, обнаруженную
- *    с прошлого раза (см. chainmailUnderArmor$beforeClick).
- *
- * 2. Если в слоте лежит обычная броня, а под ней в Attachment
- *    спрятана кольчуга — мы временно "прячем" Attachment
- *    (очищаем его) и НЕ отменяем клик, позволяя ванильному
- *    doClick() отработать как для обычной брони, каким бы
- *    ни был тип клика.
- *
- * 3. В самом конце того же клика (TAIL) мы смотрим, что стало
- *    с содержимым слота, и решаем, куда должна вернуться
- *    спрятанная кольчуга — это единственное место, которое
- *    должно знать, что произошло.
- *
- * Отдельно вручную обрабатывается только один сценарий,
- * который ванильная механика в принципе не умеет: перенос
- * кольчуги из ArmorSlot в Attachment в момент, когда игрок
- * впервые надевает броню поверх лежащей открыто кольчуги.
- */
 @Mixin(AbstractContainerMenu.class)
 public abstract class AbstractContainerMenuMixin {
 
@@ -64,12 +32,6 @@ public abstract class AbstractContainerMenuMixin {
     @Shadow
     public abstract void setCarried(ItemStack stack);
 
-    /*
-     * Поля для передачи состояния между HEAD- и TAIL-инъекциями
-     * одного и того же вызова doClick(). AbstractContainerMenu
-     * не бывает реентерабельным в рамках обработки одного клика
-     * на одном потоке, поэтому instance-поле безопасно.
-     */
     @Unique
     private EquipmentSlot chainmailUnderArmor$pendingSlot;
 
@@ -346,11 +308,6 @@ public abstract class AbstractContainerMenuMixin {
      * не сделает (слот занят), либо создаст рассинхронизацию,
      * поэтому обрабатываем вручную и полностью отменяем ванильный
      * клик.
-     *
-     * Это единственный сценарий, который в принципе не может
-     * возникнуть на самом ArmorSlot — здесь клик происходит
-     * по слоту обычного инвентаря, поэтому он не пересекается
-     * с логикой в chainmailUnderArmor$beforeClick.
      */
     @Unique
     private void chainmailUnderArmor$handleEquipFromInventory(
