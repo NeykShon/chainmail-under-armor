@@ -13,7 +13,7 @@ public final class ChainmailUtil {
     private ChainmailUtil() {
     }
 
-    /*
+    /**
      * Проверяет, является ли предмет кольчугой
      * из нашего мода или ванильной кольчугой Minecraft.
      */
@@ -32,7 +32,7 @@ public final class ChainmailUtil {
                 || stack.is(Items.CHAINMAIL_BOOTS);
     }
 
-    /*
+    /**
      * Проверяет, является ли предмет обычной бронёй.
      *
      * Кольчуга намеренно исключается.
@@ -77,7 +77,7 @@ public final class ChainmailUtil {
                 || slot == EquipmentSlot.FEET;
     }
 
-    /*
+    /**
      * Проверяет, является ли кольчуга подходящей
      * для конкретного слота брони.
      */
@@ -110,7 +110,7 @@ public final class ChainmailUtil {
         };
     }
 
-    /*
+    /**
      * Возвращает слот, для которого предназначена кольчуга.
      *
      * Если предмет не является кольчугой,

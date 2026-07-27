@@ -6,7 +6,8 @@
       "ArmorSlotMixin",
       "AbstractContainerMenuMixin",
       "LivingEntityMixin",
-      "ServerPlayerMixin"
+      "ServerPlayerMixin",
+      "PlayerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

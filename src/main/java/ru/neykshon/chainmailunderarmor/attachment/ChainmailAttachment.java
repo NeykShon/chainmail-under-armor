@@ -13,6 +13,18 @@ public record ChainmailAttachment(
         ItemStack boots
 ) {
 
+    /*
+     * ВАЖНО: без Codec attachment регистрируется как непостоянный
+     * (не сохраняется в NBT) и не переносится на новый инстанс
+     * ServerPlayer при респавне/релогине/переходе между мирами.
+     * ItemStack.OPTIONAL_CODEC используется вместо ItemStack.CODEC,
+     * т.к. поля могут быть ItemStack.EMPTY.
+     *
+     * Имя и сигнатура ItemStack.OPTIONAL_CODEC заявлены по общей
+     * практике API в современных версиях — сверьте по автокомплиту
+     * в IDE под вашу 26.1, если что-то не совпадёт, имя могло
+     * смениться.
+     */
     public static final Codec<ChainmailAttachment> CODEC = RecordCodecBuilder.create(instance ->
             instance.group(
                     ItemStack.OPTIONAL_CODEC.fieldOf("helmet").forGetter(ChainmailAttachment::helmet),

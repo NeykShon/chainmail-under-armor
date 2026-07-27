@@ -8,15 +8,6 @@ import org.slf4j.LoggerFactory;
 import ru.neykshon.chainmailunderarmor.item.ModItems;
 import ru.neykshon.chainmailunderarmor.attachment.ModAttachments;
 
-/**
- * ПИЗДЕЦ Я УЖЕ ДВА ДНЯ НЕ МОГУ СДЕЛАТЬ ЭТУ ХУЕТУ!!!
- * Я ДУМАЛ, ЧТО МОД ЭЛЕМЕНТВРНЫЙ И Я ЕГО ЗАКОНЧУ ЗА
- * ПАРУ ЧАСОВ, НО ПОСТОЯННО ВЫЛАЗИТ КАКЯ-ТО ХЕРНЯ
- * КОТОРАЯ НА ФИКС ОТНИМАЕТ ПО ПОЛ ДНЯ БЛЯТЬ!
- * ВЕСЬ ПРОЕКТ НА СОПЛЯХ ДЕРЖИТСЯ И РАБОТАЕТ ЧЕРЕЗ
- * ЖОПУ!!!
- */
-
 public class ChainmailUnderArmor implements ModInitializer {
 
     public static final String MOD_ID = "chainmail-under-armor";
