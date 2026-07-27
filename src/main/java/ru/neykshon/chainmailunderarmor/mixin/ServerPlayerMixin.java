@@ -12,6 +12,12 @@ import ru.neykshon.chainmailunderarmor.ChainmailUnderArmor;
 import ru.neykshon.chainmailunderarmor.attachment.ModAttachments;
 
 /**
+ * Тестами (см. переписку по багрепорту) подтверждено, что сама
+ * смена gamemode НЕ портит и НЕ теряет Attachment — данные
+ * переживают setGameMode() без изменений в обе стороны.
+ * Настоящий источник рассинхронизации — необработанные типы
+ * кликов в инвентарном меню (см. AbstractContainerMenuMixin).
+ *
  * Раньше здесь стоял отладочный код с System.out.println на
  * каждую смену режима — он не нёс функциональной нагрузки и
  * засорял консоль сервера в проде. Оставляем только компактный
