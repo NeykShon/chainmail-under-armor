@@ -12,10 +12,12 @@ import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.gamerules.GameRules;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import ru.neykshon.chainmailunderarmor.ChainmailUnderArmor;
 import ru.neykshon.chainmailunderarmor.attachment.ChainmailAttachment;
@@ -25,8 +27,48 @@ import ru.neykshon.chainmailunderarmor.util.ChainmailAttributes;
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityMixin {
 
+    /*
+     * =====================================================================
+     * БОНУС ЗАЩИТЫ ОТ КОЛЬЧУГИ — ПОСТ-ОБРАБОТКА УРОНА
+     * =====================================================================
+     *
+     * actuallyHurt(DamageSource, float) вызывается, когда основная броня
+     * и зачарования (Protection и т.п.) уже отработали — здесь float
+     * amount это именно тот урон, который "прошёл сквозь основную
+     * броню", как и описано в задаче. Снимаем с него ещё процент
+     * от надетых деталей кольчуги.
+     *
+     * @ModifyVariable требует, чтобы у хендлера параметром была
+     * ТОЛЬКО изменяемая переменная (здесь — float) — попытка
+     * захватить ещё и DamageSource вторым параметром не соответствует
+     * ожидаемой сигнатуре (это и была ошибка IntelliJ). Поэтому
+     * DamageSource запоминаем отдельно: лёгкий @Inject на публичном
+     * hurt(DamageSource, float), который вызывается раньше и всегда
+     * ведёт к actuallyHurt() в рамках того же вызова, сохраняет его
+     * в @Unique-поле — @ModifyVariable потом просто его читает.
+     *
+     * ВАЖНО: имена/сигнатуры hurt/actuallyHurt соответствуют
+     * устоявшейся на протяжении многих версий схеме — не проверены
+     * компиляцией под вашу 26.1. Если IDE подсветит несовпадение,
+     * найдите (1) публичный метод получения урона, вызывающий
+     * actuallyHurt, и (2) сам actuallyHurt — тот, что применяется
+     * ПОСЛЕ учёта брони/зачарований и ДО отнятия здоровья.
+     */
+
+    @Unique
+    private DamageSource chainmailUnderArmor$pendingDamageSource;
+
+    @Inject(method = "hurt", at = @At("HEAD"))
+    private void chainmailUnderArmor$captureDamageSource(
+            DamageSource source,
+            float amount,
+            CallbackInfoReturnable<Boolean> cir
+    ) {
+        this.chainmailUnderArmor$pendingDamageSource = source;
+    }
+
     @ModifyVariable(method = "actuallyHurt", at = @At("HEAD"), argsOnly = true)
-    private float chainmailUnderArmor$reduceDamageAfterArmor(float amount, DamageSource source) {
+    private float chainmailUnderArmor$reduceDamageAfterArmor(float amount) {
 
         LivingEntity entity = (LivingEntity) (Object) this;
 
@@ -34,7 +76,9 @@ public abstract class LivingEntityMixin {
             return amount;
         }
 
-        if (source.is(DamageTypeTags.BYPASSES_ARMOR)) {
+        DamageSource source = this.chainmailUnderArmor$pendingDamageSource;
+
+        if (source != null && source.is(DamageTypeTags.BYPASSES_ARMOR)) {
             // Если урон в принципе не проходит через броню (голод,
             // /kill, и т.п.), кольчуге тоже нечего снимать.
             return amount;
