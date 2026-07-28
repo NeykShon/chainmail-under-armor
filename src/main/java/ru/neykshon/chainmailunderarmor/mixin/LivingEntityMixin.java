@@ -17,7 +17,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import ru.neykshon.chainmailunderarmor.ChainmailUnderArmor;
 import ru.neykshon.chainmailunderarmor.attachment.ChainmailAttachment;
@@ -39,32 +38,44 @@ public abstract class LivingEntityMixin {
      * от надетых деталей кольчуги.
      *
      * @ModifyVariable требует, чтобы у хендлера параметром была
-     * ТОЛЬКО изменяемая переменная (здесь — float) — попытка
-     * захватить ещё и DamageSource вторым параметром не соответствует
-     * ожидаемой сигнатуре (это и была ошибка IntelliJ). Поэтому
-     * DamageSource запоминаем отдельно: лёгкий @Inject на публичном
-     * hurt(DamageSource, float), который вызывается раньше и всегда
-     * ведёт к actuallyHurt() в рамках того же вызова, сохраняет его
-     * в @Unique-поле — @ModifyVariable потом просто его читает.
+     * ТОЛЬКО изменяемая переменная — попытка захватить ещё и
+     * DamageSource вторым параметром не подходит под ожидаемую
+     * сигнатуру.
      *
-     * ВАЖНО: имена/сигнатуры hurt/actuallyHurt соответствуют
-     * устоявшейся на протяжении многих версий схеме — не проверены
-     * компиляцией под вашу 26.1. Если IDE подсветит несовпадение,
-     * найдите (1) публичный метод получения урона, вызывающий
-     * actuallyHurt, и (2) сам actuallyHurt — тот, что применяется
-     * ПОСЛЕ учёта брони/зачарований и ДО отнятия здоровья.
+     * Первая попытка чинить это через отдельный @Inject на внешнем
+     * методе hurt(DamageSource, float) не сработала — в вашей 26.1
+     * такого метода с этим именем нет (судя по тому, что
+     * dropAllDeathLoot() у вас уже принимает ServerLevel первым
+     * параметром, внешний метод получения урона тоже наверняка
+     * называется иначе, например hurtServer(ServerLevel, ...)).
+     *
+     * Вместо того чтобы гадать имя внешнего метода ещё раз, вообще
+     * не трогаем его. DamageSource и float — это ДВА СОБСТВЕННЫХ
+     * параметра actuallyHurt (тот факт, что по нему не было ошибки,
+     * подтверждает, что метод с этим именем точно существует).
+     * Поэтому вешаем на actuallyHurt два независимых @ModifyVariable:
+     * один типа DamageSource, который ничего не меняет и просто
+     * запоминает значение в поле, и второй типа float, который его
+     * читает и модифицирует урон. Каждый по отдельности соответствует
+     * правилу "один параметр — один тип" для @ModifyVariable.
+     *
+     * ВАЖНО про порядок: оба инъектора одного типа (@ModifyVariable)
+     * на одной и той же точке (HEAD одного метода) — при равном
+     * приоритете Mixin применяет их в порядке объявления в классе,
+     * поэтому "чтение" DamageSource объявлено ВЫШЕ "изменения" float
+     * и должно отрабатывать первым. Если на тестах увидите, что
+     * BYPASSES_ARMOR не срабатывает (кольчуга снижает урон от голода
+     * и т.п.), это будет означать обратный порядок — дайте знать,
+     * поменяем механизм на @Redirect.
      */
 
     @Unique
-    private DamageSource chainmailUnderArmor$pendingDamageSource;
+    private DamageSource chainmailUnderArmor$currentDamageSource;
 
-    @Inject(method = "hurt", at = @At("HEAD"))
-    private void chainmailUnderArmor$captureDamageSource(
-            DamageSource source,
-            float amount,
-            CallbackInfoReturnable<Boolean> cir
-    ) {
-        this.chainmailUnderArmor$pendingDamageSource = source;
+    @ModifyVariable(method = "actuallyHurt", at = @At("HEAD"), argsOnly = true)
+    private DamageSource chainmailUnderArmor$captureDamageSource(DamageSource source) {
+        this.chainmailUnderArmor$currentDamageSource = source;
+        return source;
     }
 
     @ModifyVariable(method = "actuallyHurt", at = @At("HEAD"), argsOnly = true)
@@ -76,7 +87,7 @@ public abstract class LivingEntityMixin {
             return amount;
         }
 
-        DamageSource source = this.chainmailUnderArmor$pendingDamageSource;
+        DamageSource source = this.chainmailUnderArmor$currentDamageSource;
 
         if (source != null && source.is(DamageTypeTags.BYPASSES_ARMOR)) {
             // Если урон в принципе не проходит через броню (голод,
