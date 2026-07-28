@@ -75,6 +75,13 @@ public abstract class LivingEntityMixin {
     @ModifyVariable(method = "actuallyHurt", at = @At("HEAD"), argsOnly = true)
     private DamageSource chainmailUnderArmor$captureDamageSource(DamageSource source) {
         this.chainmailUnderArmor$currentDamageSource = source;
+
+        // ВРЕМЕННО: подтверждает, что actuallyHurt() вообще вызывается
+        // и что этот @ModifyVariable отрабатывает. Уберите после диагностики.
+        ChainmailUnderArmor.LOGGER.info(
+                "[DEBUG] captureDamageSource fired, source={}", source
+        );
+
         return source;
     }
 
@@ -83,23 +90,43 @@ public abstract class LivingEntityMixin {
 
         LivingEntity entity = (LivingEntity) (Object) this;
 
+        // ВРЕМЕННО. Уберите после диагностики.
+        ChainmailUnderArmor.LOGGER.info(
+                "[DEBUG] reduceDamageAfterArmor fired, entity={}, amount={}",
+                entity, amount
+        );
+
         if (!(entity instanceof Player player)) {
+            ChainmailUnderArmor.LOGGER.info("[DEBUG] not a player, skipping");
             return amount;
         }
 
         DamageSource source = this.chainmailUnderArmor$currentDamageSource;
 
+        // ВРЕМЕННО. Уберите после диагностики.
+        ChainmailUnderArmor.LOGGER.info(
+                "[DEBUG] captured source={}, hasAttached={}",
+                source, player.hasAttached(ModAttachments.CHAINMAIL)
+        );
+
         if (source != null && source.is(DamageTypeTags.BYPASSES_ARMOR)) {
             // Если урон в принципе не проходит через броню (голод,
             // /kill, и т.п.), кольчуге тоже нечего снимать.
+            ChainmailUnderArmor.LOGGER.info("[DEBUG] bypasses armor, skipping");
             return amount;
         }
 
         if (!player.hasAttached(ModAttachments.CHAINMAIL)) {
+            ChainmailUnderArmor.LOGGER.info("[DEBUG] no chainmail attached, skipping");
             return amount;
         }
 
         double reductionFraction = ChainmailAttributes.getDamageReductionFraction(player);
+
+        // ВРЕМЕННО. Уберите после диагностики.
+        ChainmailUnderArmor.LOGGER.info(
+                "[DEBUG] reductionFraction={}", reductionFraction
+        );
 
         if (reductionFraction <= 0.0) {
             return amount;
@@ -110,7 +137,14 @@ public abstract class LivingEntityMixin {
         // ТЗ: кольчуга не может опустить урон ниже 1 — но и не
         // поднимает его до 1, если он изначально был меньше
         // (не превращаем царапину в полноценный удар).
-        return Math.min(amount, Math.max(1.0F, reduced));
+        float result = Math.min(amount, Math.max(1.0F, reduced));
+
+        // ВРЕМЕННО. Уберите после диагностики.
+        ChainmailUnderArmor.LOGGER.info(
+                "[DEBUG] amount {} -> {}", amount, result
+        );
+
+        return result;
     }
 
     @Inject(
